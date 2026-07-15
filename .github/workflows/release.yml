@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Validate release configuration
+        id: version
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          grep -Fxq "VERSION ?= $version" Makefile
+          grep -Fxq "pkgver=$version" packaging/arch/PKGBUILD
+          grep -Fxq "pkgver=$version" packaging/aur/PKGBUILD
+          if [[ -z "$AUR_SSH_PRIVATE_KEY" ]]; then
+            echo "::error::Repository secret AUR_SSH_PRIVATE_KEY is required"
+            exit 1
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build release files
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          ldflags="-s -w -X github.com/mornhussakuyo-hub/ezc/internal/app.Version=$VERSION"
+          mkdir -p dist/linux-package dist/windows-package
+          GOOS=linux GOARCH=amd64 go build -buildvcs=false -trimpath -ldflags "$ldflags" -o dist/ezc-linux-amd64 ./cmd/ezc
+          GOOS=windows GOARCH=amd64 go build -buildvcs=false -trimpath -ldflags "$ldflags" -o dist/ezc-windows-amd64.exe ./cmd/ezc
+          cp dist/ezc-linux-amd64 dist/linux-package/ezc
+          cp README.md DESIGN.md LICENSE dist/linux-package/
+          cp dist/ezc-windows-amd64.exe dist/windows-package/ezc.exe
+          cp README.md DESIGN.md LICENSE dist/windows-package/
+          tar -czf "dist/ezc_${VERSION}_linux_amd64.tar.gz" -C dist/linux-package ezc README.md DESIGN.md LICENSE
+          (cd dist/windows-package && zip -q "../ezc_${VERSION}_windows_amd64.zip" ezc.exe README.md DESIGN.md LICENSE)
+          (cd dist && sha256sum \
+            ezc-linux-amd64 \
+            ezc-windows-amd64.exe \
+            "ezc_${VERSION}_linux_amd64.tar.gz" \
+            "ezc_${VERSION}_windows_amd64.zip" > SHA256SUMS)
+
+      - name: Prepare AUR checkout
+        shell: bash
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<'EOF'
+          Host aur.archlinux.org
+            IdentityFile ~/.ssh/aur
+            IdentitiesOnly yes
+          EOF
+          git clone ssh://aur@aur.archlinux.org/ezc-bin.git aur
+
+      - name: Publish GitHub release
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          assets=(
+            dist/ezc-linux-amd64
+            dist/ezc-windows-amd64.exe
+            "dist/ezc_${VERSION}_linux_amd64.tar.gz"
+            "dist/ezc_${VERSION}_windows_amd64.zip"
+            dist/SHA256SUMS
+          )
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+              --verify-tag \
+              --title "EZC $GITHUB_REF_NAME" \
+              --generate-notes
+          fi
+
+      - name: Publish AUR package
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          checksum="$(sha256sum "dist/ezc_${VERSION}_linux_amd64.tar.gz" | cut -d ' ' -f 1)"
+          cp packaging/aur/PKGBUILD packaging/aur/.SRCINFO aur/
+          sed -i "s/^sha256sums_x86_64=.*/sha256sums_x86_64=('$checksum')/" aur/PKGBUILD
+          sed -i "s/^\tsha256sums_x86_64 =.*/\tsha256sums_x86_64 = $checksum/" aur/.SRCINFO
+          git -C aur config user.name github-actions\[bot\]
+          git -C aur config user.email 41898282+github-actions\[bot\]@users.noreply.github.com
+          git -C aur add PKGBUILD .SRCINFO
+          git -C aur commit -m "Update to $VERSION"
+          git -C aur push origin master

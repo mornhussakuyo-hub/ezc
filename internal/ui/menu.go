@@ -38,25 +38,48 @@ func Select(title string, items []string, allowRight bool) (int, Key, error) {
 	}()
 
 	selected := 0
+	query := ""
+	searchableItems := prepareMenuItems(items)
 	for {
-		renderedLines = renderInline(title, items, selected, allowRight, columns, rows, renderedLines)
+		matches := filterPreparedMenuItems(searchableItems, query)
+		labels := make([]string, len(matches))
+		for index, match := range matches {
+			labels[index] = match.label
+		}
+		renderedLines = renderInline(title, labels, selected, query, allowRight, columns, rows, renderedLines)
 		key, err := readKey(inputReader)
 		if err != nil {
 			return -1, KeyCancel, err
 		}
 		switch key {
 		case "up":
-			selected = (selected - 1 + len(items)) % len(items)
+			if len(matches) > 0 {
+				selected = (selected - 1 + len(matches)) % len(matches)
+			}
 		case "down":
-			selected = (selected + 1) % len(items)
+			if len(matches) > 0 {
+				selected = (selected + 1) % len(matches)
+			}
 		case "right":
-			if allowRight {
-				return selected, KeyRight, nil
+			if allowRight && len(matches) > 0 {
+				return matches[selected].originalIndex, KeyRight, nil
 			}
 		case "enter":
-			return selected, KeyEnter, nil
+			if len(matches) > 0 {
+				return matches[selected].originalIndex, KeyEnter, nil
+			}
 		case "cancel":
 			return -1, KeyCancel, nil
+		case "backspace":
+			if query != "" {
+				query = removeLastRune(query)
+				selected = 0
+			}
+		default:
+			if len(key) == 1 && key[0] >= 0x20 && key[0] <= 0x7e {
+				query += key
+				selected = 0
+			}
 		}
 	}
 }
@@ -88,22 +111,34 @@ func Conflict(destination string) (int, error) {
 	}
 }
 
-func renderInline(title string, items []string, selected int, allowRight bool, columns, rows, previousLines int) int {
+func renderInline(title string, items []string, selected int, query string, allowRight bool, columns, rows, previousLines int) int {
 	boxWidth := min(max(columns-2, 20), 100)
 	contentWidth := boxWidth - 4
-	visibleCount := min(len(items), min(10, max(3, rows/2-4)))
-	start := selected - visibleCount/2
-	start = max(0, min(start, len(items)-visibleCount))
-	end := start + visibleCount
+	visibleCount := min(len(items), min(10, max(3, rows/2-5)))
+	start := 0
+	end := 0
+	if visibleCount > 0 {
+		start = selected - visibleCount/2
+		start = max(0, min(start, len(items)-visibleCount))
+		end = start + visibleCount
+	}
 
-	instructions := "↑↓ 移动 · Enter 确定 · q 退出"
+	instructions := "输入拼音搜索 · ↑↓ 移动 · Enter 确定 · Esc 退出"
 	if allowRight {
-		instructions = "↑↓ 移动 · →/Enter 操作 · q 退出"
+		instructions = "输入拼音搜索 · ↑↓ 移动 · →/Enter 操作 · Esc 退出"
+	}
+	position := fmt.Sprintf("0/%d", len(items))
+	if len(items) > 0 {
+		position = fmt.Sprintf("%d/%d", selected+1, len(items))
 	}
 	lines := []string{
 		"┌" + strings.Repeat("─", boxWidth-2) + "┐",
 		"│ " + fitAndPad(title, contentWidth) + " │",
-		"│ " + fitAndPad(fmt.Sprintf("%d/%d · %s", selected+1, len(items), instructions), contentWidth) + " │",
+		"│ " + fitAndPad("搜索: "+query, contentWidth) + " │",
+		"│ " + fitAndPad(position+" · "+instructions, contentWidth) + " │",
+	}
+	if len(items) == 0 {
+		lines = append(lines, "│ "+fitAndPad("  没有匹配项", contentWidth)+" │")
 	}
 	for index := start; index < end; index++ {
 		item := fitAndPad("  "+items[index], contentWidth)
@@ -116,9 +151,7 @@ func renderInline(title string, items []string, selected int, allowRight bool, c
 	}
 	lines = append(lines, "└"+strings.Repeat("─", boxWidth-2)+"┘")
 
-	if previousLines > 0 {
-		fmt.Printf("\x1b[%dA", previousLines)
-	}
+	clearInline(previousLines)
 	for _, line := range lines {
 		fmt.Printf("\r\x1b[2K%s\r\n", line)
 	}
@@ -197,15 +230,14 @@ func readKey(reader *bufio.Reader) (string, error) {
 	switch value {
 	case '\r', '\n':
 		return "enter", nil
-	case 'q', 'Q', 3:
+	case 3:
 		return "cancel", nil
-	case 'k', 'K':
-		return "up", nil
-	case 'j', 'J':
-		return "down", nil
-	case 'l', 'L':
-		return "right", nil
+	case 0x08, 0x7f:
+		return "backspace", nil
 	case 0x1b:
+		if reader.Buffered() == 0 {
+			return "cancel", nil
+		}
 		second, err := reader.ReadByte()
 		if err != nil {
 			return "cancel", nil
@@ -226,7 +258,15 @@ func readKey(reader *bufio.Reader) (string, error) {
 			return "right", nil
 		}
 	}
-	return "", nil
+	return string(value), nil
+}
+
+func removeLastRune(value string) string {
+	runes := []rune(value)
+	if len(runes) == 0 {
+		return value
+	}
+	return string(runes[:len(runes)-1])
 }
 
 func selectByNumber(title string, items []string) (int, Key, error) {
