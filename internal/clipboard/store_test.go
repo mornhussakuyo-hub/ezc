@@ -1,6 +1,7 @@
 package clipboard
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -86,5 +87,33 @@ func TestStoreCleansMissingPaths(t *testing.T) {
 	}
 	if len(entries) != 1 || entries[0].Path != existing {
 		t.Fatalf("unexpected remaining entries: %#v", entries)
+	}
+}
+
+func TestStoreFallsBackWhenRenameCrossesDevices(t *testing.T) {
+	directory := t.TempDir()
+	temporaryPath := filepath.Join(directory, "clipboard.json.tmp")
+	statePath := filepath.Join(directory, "clipboard.json")
+	data := []byte(`{"boot_id":"boot-1","entries":[]}`)
+	if err := os.WriteFile(temporaryPath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := replaceStateFile(temporaryPath, statePath, data, func(_, _ string) error {
+		return crossDeviceRenameTestError
+	})
+	if err != nil {
+		t.Fatalf("expected cross-device fallback to succeed: %v", err)
+	}
+
+	persisted, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(persisted) != string(data) {
+		t.Fatalf("unexpected persisted state: %q", persisted)
+	}
+	if _, err := os.Stat(temporaryPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected temporary file cleanup, got %v", err)
 	}
 }

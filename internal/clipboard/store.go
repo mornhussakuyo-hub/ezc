@@ -207,9 +207,24 @@ func (store *Store) save(current *state) error {
 	if runtime.GOOS == "windows" {
 		_ = os.Remove(store.statePath)
 	}
-	if err := os.Rename(temporaryPath, store.statePath); err != nil {
+	if err := replaceStateFile(temporaryPath, store.statePath, data, os.Rename); err != nil {
 		_ = os.Remove(temporaryPath)
 		return fmt.Errorf("保存剪切板: %w", err)
+	}
+	return nil
+}
+
+func replaceStateFile(temporaryPath, statePath string, data []byte, renameFile func(string, string) error) error {
+	if err := renameFile(temporaryPath, statePath); err != nil {
+		if isCrossDeviceRename(err) {
+			writeErr := os.WriteFile(statePath, data, 0o600)
+			if writeErr == nil {
+				_ = os.Remove(temporaryPath)
+				return nil
+			}
+			err = errors.Join(err, writeErr)
+		}
+		return err
 	}
 	return nil
 }

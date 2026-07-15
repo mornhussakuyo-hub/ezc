@@ -1,4 +1,4 @@
-VERSION ?= 0.1.2
+VERSION ?= 0.1.3
 GOCACHE ?= /tmp/ezc-go-cache
 DIST := $(CURDIR)/dist
 LDFLAGS := -s -w -X github.com/mornhussakuyo-hub/ezc/internal/app.Version=$(VERSION)

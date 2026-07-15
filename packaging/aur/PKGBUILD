@@ -1,5 +1,5 @@
 pkgname=ezc-bin
-pkgver=0.1.2
+pkgver=0.1.3
 pkgrel=1
 pkgdesc='A terminal clipboard for copying and moving files'
 arch=('x86_64')
@@ -9,7 +9,7 @@ provides=("ezc=$pkgver")
 conflicts=('ezc')
 options=('!strip')
 source_x86_64=("ezc-$pkgver.tar.gz::$url/releases/download/v$pkgver/ezc_${pkgver}_linux_amd64.tar.gz")
-sha256sums_x86_64=('7b936b8fefde4ddde3bf897ce275034835726a5806c687f54f7f85383ff5cabd')
+sha256sums_x86_64=('7cd22b36b982881380d57fae5f85a0a0b9a7f804a1c15774b2fa553b4fd253a4')
 
 package() {
     install -Dm755 "$srcdir/ezc" "$pkgdir/usr/bin/ezc"
