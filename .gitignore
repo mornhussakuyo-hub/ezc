@@ -1,0 +1,8 @@
+/dist/
+/packaging/arch/ezc
+/packaging/arch/README.md
+/packaging/arch/DESIGN.md
+/packaging/arch/LICENSE
+/packaging/arch/pkg/
+/packaging/arch/src/
+/packaging/arch/*.pkg.tar.*

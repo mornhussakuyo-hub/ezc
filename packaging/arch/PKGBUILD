@@ -1,0 +1,17 @@
+pkgname=ezc
+pkgver=0.1.2
+pkgrel=1
+pkgdesc='A terminal clipboard for copying and moving files'
+arch=('x86_64')
+url='https://github.com/mornhussakuyo-hub/ezc'
+license=('MIT')
+options=('!debug' '!strip')
+source=('ezc' 'README.md' 'DESIGN.md' 'LICENSE')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+    install -Dm755 "$srcdir/ezc" "$pkgdir/usr/bin/ezc"
+    install -Dm644 "$srcdir/README.md" "$pkgdir/usr/share/doc/ezc/README.md"
+    install -Dm644 "$srcdir/DESIGN.md" "$pkgdir/usr/share/doc/ezc/DESIGN.md"
+    install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/ezc/LICENSE"
+}
