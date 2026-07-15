@@ -22,7 +22,12 @@ Arch Linux：
 yay -S ezc-bin
 ```
 
-Windows：解压 Release 中的 ZIP，将 `ezc.exe` 所在目录加入 `PATH`。
+Windows（Scoop）：
+
+```powershell
+scoop bucket add ezc https://github.com/mornhussakuyo-hub/scoop-ezc
+scoop install ezc/ezc
+```
 
 ## 构建
 
