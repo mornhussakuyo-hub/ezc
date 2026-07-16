@@ -23,36 +23,6 @@ func TestFitAndPadTruncatesLongPaths(t *testing.T) {
 	}
 }
 
-func TestFilterMenuItemsMatchesFullPinyinAndInitials(t *testing.T) {
-	items := []string{"草稿.txt", "测试报告.txt", "测试版本.txt"}
-
-	fullPinyin := filterMenuItems(items, "ceshibaogao")
-	if len(fullPinyin) != 1 || fullPinyin[0].originalIndex != 1 {
-		t.Fatalf("expected 测试报告.txt for full pinyin, got %#v", fullPinyin)
-	}
-
-	initials := filterMenuItems(items, "csbg")
-	if len(initials) != 1 || initials[0].originalIndex != 1 {
-		t.Fatalf("expected 测试报告.txt for initials, got %#v", initials)
-	}
-}
-
-func TestFilterMenuItemsMatchesSubsequence(t *testing.T) {
-	items := []string{"测试报告.txt", "测试版本.txt", "notes.txt"}
-	matches := filterMenuItems(items, "cshg")
-	if len(matches) != 1 || matches[0].originalIndex != 0 {
-		t.Fatalf("expected pinyin subsequence to match 测试报告.txt, got %#v", matches)
-	}
-}
-
-func TestFilterMenuItemsPrefersContiguousMatch(t *testing.T) {
-	items := []string{"a-b-c.txt", "abc.txt"}
-	matches := filterMenuItems(items, "abc")
-	if len(matches) != 2 || matches[0].originalIndex != 1 {
-		t.Fatalf("expected contiguous match first, got %#v", matches)
-	}
-}
-
 func TestReadKeyTreatsQAsSearchInputAndEscapeAsCancel(t *testing.T) {
 	key, err := readKey(bufio.NewReader(strings.NewReader("q")))
 	if err != nil || key != "q" {

@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/mornhussakuyo-hub/ezc/internal/search"
 )
 
 type Key int
@@ -39,12 +41,12 @@ func Select(title string, items []string, allowRight bool) (int, Key, error) {
 
 	selected := 0
 	query := ""
-	searchableItems := prepareMenuItems(items)
+	matcher := search.New(items)
 	for {
-		matches := filterPreparedMenuItems(searchableItems, query)
+		matches := matcher.Rank(query)
 		labels := make([]string, len(matches))
 		for index, match := range matches {
-			labels[index] = match.label
+			labels[index] = items[match.Index]
 		}
 		renderedLines = renderInline(title, labels, selected, query, allowRight, columns, rows, renderedLines)
 		key, err := readKey(inputReader)
@@ -62,11 +64,11 @@ func Select(title string, items []string, allowRight bool) (int, Key, error) {
 			}
 		case "right":
 			if allowRight && len(matches) > 0 {
-				return matches[selected].originalIndex, KeyRight, nil
+				return matches[selected].Index, KeyRight, nil
 			}
 		case "enter":
 			if len(matches) > 0 {
-				return matches[selected].originalIndex, KeyEnter, nil
+				return matches[selected].Index, KeyEnter, nil
 			}
 		case "cancel":
 			return -1, KeyCancel, nil
