@@ -12,6 +12,7 @@ import (
 	"github.com/mornhussakuyo-hub/ezc/internal/clipboard"
 	"github.com/mornhussakuyo-hub/ezc/internal/fileops"
 	"github.com/mornhussakuyo-hub/ezc/internal/lock"
+	"github.com/mornhussakuyo-hub/ezc/internal/search"
 	"github.com/mornhussakuyo-hub/ezc/internal/ui"
 )
 
@@ -90,6 +91,11 @@ func (current *application) copyOrCut(arguments []string, operation clipboard.Op
 		}
 		if path == "" {
 			return nil
+		}
+	} else {
+		path, err = resolveSourceArgument(path, showHidden)
+		if err != nil {
+			return err
 		}
 	}
 	absolutePath, err := filepath.Abs(path)
@@ -346,7 +352,7 @@ func parseSourceArguments(arguments []string) (string, bool, error) {
 			return "", false, fmt.Errorf("未知参数 %q", argument)
 		}
 		if path != "" {
-			return "", false, errors.New("第一版每次只能选择一个文件或目录")
+			return "", false, errors.New("每次只能选择一个文件、目录或查询")
 		}
 		path = argument
 	}
@@ -354,23 +360,10 @@ func parseSourceArguments(arguments []string) (string, bool, error) {
 }
 
 func selectCurrentDirectory(showHidden bool) (string, error) {
-	entries, err := os.ReadDir(".")
+	filtered, err := currentDirectoryEntries(showHidden)
 	if err != nil {
-		return "", fmt.Errorf("读取当前目录: %w", err)
+		return "", err
 	}
-	filtered := make([]os.DirEntry, 0, len(entries))
-	for _, entry := range entries {
-		if !showHidden && isHidden(entry.Name()) {
-			continue
-		}
-		filtered = append(filtered, entry)
-	}
-	sort.SliceStable(filtered, func(left, right int) bool {
-		if filtered[left].IsDir() != filtered[right].IsDir() {
-			return filtered[left].IsDir()
-		}
-		return strings.ToLower(filtered[left].Name()) < strings.ToLower(filtered[right].Name())
-	})
 	labels := make([]string, len(filtered))
 	for index, entry := range filtered {
 		labels[index] = entry.Name()
@@ -386,6 +379,57 @@ func selectCurrentDirectory(showHidden bool) (string, error) {
 		return "", nil
 	}
 	return filtered[selected].Name(), nil
+}
+
+func resolveSourceArgument(path string, showHidden bool) (string, error) {
+	if _, err := os.Lstat(path); err == nil {
+		return path, nil
+	} else if !os.IsNotExist(err) {
+		return "", fmt.Errorf("访问 %q: %w", path, err)
+	}
+
+	entries, err := currentDirectoryEntries(showHidden)
+	if err != nil {
+		return "", err
+	}
+	matched, ok := bestDirectoryEntry(entries, path)
+	if !ok {
+		return "", fmt.Errorf("当前目录中没有匹配 %q 的文件或目录", path)
+	}
+	return matched.Name(), nil
+}
+
+func currentDirectoryEntries(showHidden bool) ([]os.DirEntry, error) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		return nil, fmt.Errorf("读取当前目录: %w", err)
+	}
+	filtered := make([]os.DirEntry, 0, len(entries))
+	for _, entry := range entries {
+		if !showHidden && isHidden(entry.Name()) {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	sort.SliceStable(filtered, func(left, right int) bool {
+		if filtered[left].IsDir() != filtered[right].IsDir() {
+			return filtered[left].IsDir()
+		}
+		return strings.ToLower(filtered[left].Name()) < strings.ToLower(filtered[right].Name())
+	})
+	return filtered, nil
+}
+
+func bestDirectoryEntry(entries []os.DirEntry, query string) (os.DirEntry, bool) {
+	names := make([]string, len(entries))
+	for index, entry := range entries {
+		names[index] = entry.Name()
+	}
+	result, ok := search.New(names).Best(query)
+	if !ok {
+		return nil, false
+	}
+	return entries[result.Index], true
 }
 
 func resolveConflict(destination string) (fileops.ConflictAction, error) {
@@ -407,13 +451,13 @@ func printUsage() {
 	fmt.Print(`ezc - 终端文件剪切板
 
 用法：
-  ezc cp [-h|--hide] [文件或目录]  复制到剪切板
-  ezc ct [-h|--hide] [文件或目录]  剪切并锁定
+  ezc cp [-h|--hide] [文件、目录或查询]  复制到剪切板
+  ezc ct [-h|--hide] [文件、目录或查询]  剪切并锁定
   ezc pst [目标目录]               粘贴剪切板顶部项目
   ezc pad                          浏览剪切板 TUI
   ezc rm [文件或目录]              从剪切板移除
   ezc version                      显示版本
 
-cp/ct 不传路径时会打开当前目录选择器；-h/--hide 显示隐藏项目。
+cp/ct 不传路径时会打开当前目录选择器；传入不存在的路径时会将参数作为拼音或模糊查询并自动选择最佳匹配；-h/--hide 显示隐藏项目。
 `)
 }

@@ -29,6 +29,7 @@ jobs:
           grep -Fxq "VERSION ?= $version" Makefile
           grep -Fxq "pkgver=$version" packaging/arch/PKGBUILD
           grep -Fxq "pkgver=$version" packaging/aur/PKGBUILD
+          grep -Fq "pkgver = $version" packaging/aur/.SRCINFO
           if [[ -z "$AUR_SSH_PRIVATE_KEY" ]]; then
             echo "::error::Repository secret AUR_SSH_PRIVATE_KEY is required"
             exit 1
@@ -36,7 +37,15 @@ jobs:
           echo "value=$version" >> "$GITHUB_OUTPUT"
 
       - name: Test
-        run: go test ./...
+        shell: bash
+        run: |
+          files="$(gofmt -l .)"
+          if [[ -n "$files" ]]; then
+            echo "$files"
+            exit 1
+          fi
+          go vet ./...
+          go test ./...
 
       - name: Build release files
         shell: bash

@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -18,5 +18,28 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Check formatting
+        shell: bash
+        run: |
+          files="$(gofmt -l .)"
+          if [[ -n "$files" ]]; then
+            echo "$files"
+            exit 1
+          fi
+      - run: go vet ./...
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
       - run: go test ./...
-      - run: GOOS=windows GOARCH=amd64 go build -buildvcs=false ./cmd/ezc
