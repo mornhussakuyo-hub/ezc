@@ -1,6 +1,6 @@
 # EZC
 
-`ezc`（easy copy）是一个适用于 Arch Linux 和 Windows 的终端文件剪切板，支持中英文混合路径。
+`ezc`（easy copy）是一个适用于 Arch Linux、macOS 和 Windows 的终端文件剪切板，支持中英文混合路径。
 
 ## 使用
 
@@ -22,6 +22,15 @@ Arch Linux：
 
 ```bash
 yay -S ezc-bin
+```
+
+macOS（从源码构建，需要 Go 1.26 或更高版本）：
+
+```bash
+git clone https://github.com/mornhussakuyo-hub/ezc.git
+cd ezc
+go build -o ezc ./cmd/ezc
+sudo install -m 0755 ezc /usr/local/bin/ezc
 ```
 
 Windows（Scoop）：
