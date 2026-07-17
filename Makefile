@@ -16,17 +16,25 @@ cross-check:
 build:
 	mkdir -p $(DIST)
 	GOCACHE=$(GOCACHE) GOOS=linux GOARCH=amd64 go build -buildvcs=false -trimpath -ldflags "$(LDFLAGS)" -o $(DIST)/ezc-linux-amd64 ./cmd/ezc
+	GOCACHE=$(GOCACHE) GOOS=darwin GOARCH=amd64 go build -buildvcs=false -trimpath -ldflags "$(LDFLAGS)" -o $(DIST)/ezc-darwin-amd64 ./cmd/ezc
+	GOCACHE=$(GOCACHE) GOOS=darwin GOARCH=arm64 go build -buildvcs=false -trimpath -ldflags "$(LDFLAGS)" -o $(DIST)/ezc-darwin-arm64 ./cmd/ezc
 	GOCACHE=$(GOCACHE) GOOS=windows GOARCH=amd64 go build -buildvcs=false -trimpath -ldflags "$(LDFLAGS)" -o $(DIST)/ezc-windows-amd64.exe ./cmd/ezc
 
 package: build arch-package
-	mkdir -p $(DIST)/linux-package $(DIST)/windows-package
+	mkdir -p $(DIST)/linux-package $(DIST)/darwin-amd64-package $(DIST)/darwin-arm64-package $(DIST)/windows-package
 	cp $(DIST)/ezc-linux-amd64 $(DIST)/linux-package/ezc
 	cp README.md DESIGN.md LICENSE $(DIST)/linux-package/
+	cp $(DIST)/ezc-darwin-amd64 $(DIST)/darwin-amd64-package/ezc
+	cp README.md DESIGN.md LICENSE $(DIST)/darwin-amd64-package/
+	cp $(DIST)/ezc-darwin-arm64 $(DIST)/darwin-arm64-package/ezc
+	cp README.md DESIGN.md LICENSE $(DIST)/darwin-arm64-package/
 	cp $(DIST)/ezc-windows-amd64.exe $(DIST)/windows-package/ezc.exe
 	cp README.md DESIGN.md LICENSE $(DIST)/windows-package/
 	tar -czf $(DIST)/ezc_$(VERSION)_linux_amd64.tar.gz -C $(DIST)/linux-package ezc README.md DESIGN.md LICENSE
+	tar -czf $(DIST)/ezc_$(VERSION)_darwin_amd64.tar.gz -C $(DIST)/darwin-amd64-package ezc README.md DESIGN.md LICENSE
+	tar -czf $(DIST)/ezc_$(VERSION)_darwin_arm64.tar.gz -C $(DIST)/darwin-arm64-package ezc README.md DESIGN.md LICENSE
 	bsdtar -a -cf $(DIST)/ezc_$(VERSION)_windows_amd64.zip -C $(DIST)/windows-package ezc.exe README.md DESIGN.md LICENSE
-	cd $(DIST) && sha256sum ezc-linux-amd64 ezc-windows-amd64.exe ezc_$(VERSION)_linux_amd64.tar.gz ezc_$(VERSION)_windows_amd64.zip ezc-$(VERSION)-1-x86_64.pkg.tar.zst > SHA256SUMS
+	cd $(DIST) && sha256sum ezc-linux-amd64 ezc-darwin-amd64 ezc-darwin-arm64 ezc-windows-amd64.exe ezc_$(VERSION)_linux_amd64.tar.gz ezc_$(VERSION)_darwin_amd64.tar.gz ezc_$(VERSION)_darwin_arm64.tar.gz ezc_$(VERSION)_windows_amd64.zip ezc-$(VERSION)-1-x86_64.pkg.tar.zst > SHA256SUMS
 
 arch-package: build
 	cp $(DIST)/ezc-linux-amd64 packaging/arch/ezc

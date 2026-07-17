@@ -33,6 +33,8 @@ go build -o ezc ./cmd/ezc
 sudo install -m 0755 ezc /usr/local/bin/ezc
 ```
 
+后续 GitHub Release 会同时提供 Apple Silicon（`darwin_arm64`）和 Intel（`darwin_amd64`）构建。
+
 Windows（Scoop）：
 
 ```powershell
