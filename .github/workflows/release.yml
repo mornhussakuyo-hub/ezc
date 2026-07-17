@@ -9,7 +9,46 @@ permissions:
   contents: write
 
 jobs:
+  macos-build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build macOS release files
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          ldflags="-s -w -X github.com/mornhussakuyo-hub/ezc/internal/app.Version=$version"
+          mkdir -p dist/darwin-amd64-package dist/darwin-arm64-package
+          GOOS=darwin GOARCH=amd64 go build -buildvcs=false -trimpath -ldflags "$ldflags" -o dist/ezc-darwin-amd64 ./cmd/ezc
+          GOOS=darwin GOARCH=arm64 go build -buildvcs=false -trimpath -ldflags "$ldflags" -o dist/ezc-darwin-arm64 ./cmd/ezc
+          codesign --force --sign - dist/ezc-darwin-amd64
+          codesign --force --sign - dist/ezc-darwin-arm64
+          codesign --verify --verbose dist/ezc-darwin-amd64
+          codesign --verify --verbose dist/ezc-darwin-arm64
+          cp dist/ezc-darwin-amd64 dist/darwin-amd64-package/ezc
+          cp README.md DESIGN.md LICENSE dist/darwin-amd64-package/
+          cp dist/ezc-darwin-arm64 dist/darwin-arm64-package/ezc
+          cp README.md DESIGN.md LICENSE dist/darwin-arm64-package/
+          COPYFILE_DISABLE=1 tar -czf "dist/ezc_${version}_darwin_amd64.tar.gz" -C dist/darwin-amd64-package ezc README.md DESIGN.md LICENSE
+          COPYFILE_DISABLE=1 tar -czf "dist/ezc_${version}_darwin_arm64.tar.gz" -C dist/darwin-arm64-package ezc README.md DESIGN.md LICENSE
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-release-files
+          path: |
+            dist/ezc-darwin-amd64
+            dist/ezc-darwin-arm64
+            dist/ezc_*_darwin_amd64.tar.gz
+            dist/ezc_*_darwin_arm64.tar.gz
+          if-no-files-found: error
+
   release:
+    needs: macos-build
     runs-on: ubuntu-latest
     env:
       AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
@@ -20,6 +59,12 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Download macOS release files
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-release-files
+          path: dist
 
       - name: Validate release configuration
         id: version
@@ -64,8 +109,12 @@ jobs:
           (cd dist/windows-package && zip -q "../ezc_${VERSION}_windows_amd64.zip" ezc.exe README.md DESIGN.md LICENSE)
           (cd dist && sha256sum \
             ezc-linux-amd64 \
+            ezc-darwin-amd64 \
+            ezc-darwin-arm64 \
             ezc-windows-amd64.exe \
             "ezc_${VERSION}_linux_amd64.tar.gz" \
+            "ezc_${VERSION}_darwin_amd64.tar.gz" \
+            "ezc_${VERSION}_darwin_arm64.tar.gz" \
             "ezc_${VERSION}_windows_amd64.zip" > SHA256SUMS)
 
       - name: Prepare AUR checkout
@@ -89,8 +138,12 @@ jobs:
         run: |
           assets=(
             dist/ezc-linux-amd64
+            dist/ezc-darwin-amd64
+            dist/ezc-darwin-arm64
             dist/ezc-windows-amd64.exe
             "dist/ezc_${VERSION}_linux_amd64.tar.gz"
+            "dist/ezc_${VERSION}_darwin_amd64.tar.gz"
+            "dist/ezc_${VERSION}_darwin_arm64.tar.gz"
             "dist/ezc_${VERSION}_windows_amd64.zip"
             dist/SHA256SUMS
           )
